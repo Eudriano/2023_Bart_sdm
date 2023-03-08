@@ -8,15 +8,15 @@
 
 rm(list = ls())
 
-#--------------------------- Labraries/ packages 
+#--------------------------- Libraries/ packages 
 packs <-c('rgdal','spdep', 'tmap','tidyverse','dismo','maptools','sf','report', 
           'performance','sp','rgeos','ggplot2','plotly','raster','tidyr',
           'dplyr','sdm', 'rworldmap','usdm', 'mapview', 
           'evaluate','corrplot','GGally','embarcadero')
 
 lapply(packs, FUN = function(X) {
-  do.call("require", list(X)) 
-})
+                                  do.call("require", list(X)) 
+                                })
 (.packages()) # Check loaded packages
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -32,14 +32,14 @@ lapply(packs, FUN = function(X) {
 setwd("~/efc/R_Stat/2022_NEMA/SDM_Bayes/1_Species")
 spg<-read.csv("Csapidus_filtered.csv",dec=".",sep=",",header=T)
 head(spg, 20) 
-nrow(spg) # 41.122 occurrences
+nrow(spg) 
 
 #--------------------------- Duplicated coordinates data 
 dups2 <- duplicated(spg[, c("Latitude","Longitude")]);dups2
-sum(dups2) # duplicated coordinates = 13.470
+sum(dups2) 
 
 spg <- spg[!dups2, ]
-nrow(spg) # final data = 27.652 occurrences
+nrow(spg) 
 
 #--------------------------- Covert data frame to spatial data
 spg1 <- SpatialPointsDataFrame(spg[, 1:2], data.frame(spg[, 3]))
@@ -51,7 +51,7 @@ spg1<-as.data.frame(spg1)
 Sapidus_Pres<-spg1
 Sapidus_Pres<-Sapidus_Pres[, c('Longitude', 'Latitude')]
 Sapidus_Pres$Presence = 1
-nrow(Sapidus_Pres) #27652
+nrow(Sapidus_Pres) 
 
 write.csv(Sapidus_Pres,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Sapidus_Pres_1.csv')
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -94,14 +94,10 @@ e <- extent(c(-99.89664,45.00737, -47.29764, 62.02496))
 Present_bioc<- crop(Present_Cov,e)
 
 #---------------------------  Crop by EEZ
-Start <- Sys.time()
 masked <- mask(x = Present_bioc, mask = EEZ)
 plot(masked, col=cl)
 Present_bioc <- crop(x = masked, y = extent(EEZ))
 plot(Present_bioc, col=cl)
-# Computation time
-Time.masked <- difftime(Sys.time(),Start,units="min") # Time difference
-Time.masked # 0.1073102 mins
 
 #---------------------------  Rename and CRS
 Present_covs <- Present_bioc # covariates
@@ -124,7 +120,7 @@ pts.sp1_Pres <- rasterToPoints(tmp_Pres,
                                fun = function(x) {
                                  x > 0
                                })
-nrow(pts.sp1_Pres)# 2121
+nrow(pts.sp1_Pres)
 
 projection(Sapidus_Pres) <- CRS('+proj=longlat +ellps=WGS84 
 	               +datum=WGS84 +no_defs +towgs84=0,0,0')
@@ -139,9 +135,9 @@ write.csv(pts.sp1_Pres,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Presence_Ra
 # Extract presence values
 pres.cov <- raster::extract(Present_covs, pts.sp1_Pres[, 1:2])
 pres.cov <- na.omit(pres.cov)
-head(pres.cov) #602, 668
+head(pres.cov) 
 nrow(pres.cov)
-nrow(pts.sp1_Pres) #2121
+nrow(pts.sp1_Pres) 
 which(is.na(pres.cov))
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -154,7 +150,7 @@ plot(absence_Pres)
 
 nrow(absence_Pres)
 
-abs.cov_Pres <- raster::extract(Present_covs, absence_Pres) #668
+abs.cov_Pres <- raster::extract(Present_covs, absence_Pres) 
 
 write.csv(absence_Pres,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Absence_0.csv')
 
@@ -328,7 +324,6 @@ dev.off()
 #~~~~~~~~~~ Varimp
 tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Present_varimpEU.tiff",
      width=6, height=4, units="in", res=600)
-#varimp(RET_Present.model, plots=TRUE)
 varimpEU(RET_Present.model, plots=TRUE)
 dev.off()
 
@@ -339,7 +334,7 @@ summary.bartEU(RET_Present.model)
 dev.off()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Present              TWO-DIMENSIONAL "NICHE"                                  #
+# Present              TWO-DIMENSIONAL "NICHE"                                 #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Presente Temperature ~ salinity
 tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Present_Temp_Sal.tiff",
@@ -349,7 +344,7 @@ dbarts::pd2bart(RET_Present.model,plotquants=T, cexlab= 1.5, axes = F,
                 pl = TRUE)
 dev.off()
 
-# Presente Temperature ~ current
+# Present Temperature ~ current
 tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Present_Temp_Cur.tiff",
      width=8.5, height=4, units="in", res=600)
 dbarts::pd2bart(RET_Present.model,plotquants=T,
@@ -405,7 +400,7 @@ partialEU(RET_Present.model,
 dev.off()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Present       SPARTIAL EFFECT - PARTIAL MAPS                     #
+# Present               SPARTIAL EFFECT - PARTIAL MAPS                         #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Present Temperature
@@ -417,8 +412,6 @@ plot(Present_sp.Temp,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Temp',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(Present_sp.Temp, 
@@ -434,8 +427,6 @@ plot(Present_sp.Sal,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Sal',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(Present_sp.Sal, 
@@ -451,8 +442,6 @@ plot(Present_sp.Cur,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Cur',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(Present_sp.Cur, 
@@ -462,6 +451,7 @@ writeRaster(Present_sp.Cur,
 #
 #----------------------------------- / / --------------------------------------#
 #
+
 rm(list = ls())
 Start <- Sys.time()
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -475,14 +465,14 @@ Start <- Sys.time()
 setwd("~/efc/R_Stat/2022_NEMA/SDM_Bayes/1_Species")
 spg<-read.csv("Csapidus_filtered.csv",dec=".",sep=",",header=T)
 head(spg, 20) 
-nrow(spg) # 41.122 occurrences
+nrow(spg) 
 
 #--------------------------- Duplicated coordinates data 
 dups2 <- duplicated(spg[, c("Latitude","Longitude")]);dups2
-sum(dups2) # duplicated coordinates = 13.470
+sum(dups2) 
 
 spg <- spg[!dups2, ]
-nrow(spg) # final data = 27.652 occurrences
+nrow(spg) 
 
 #--------------------------- Covert data frame to spatial data
 spg1 <- SpatialPointsDataFrame(spg[, 1:2], data.frame(spg[, 3]))
@@ -494,7 +484,7 @@ spg1<-as.data.frame(spg1)
 Sapidus_RCP45_2050<-spg1
 Sapidus_RCP45_2050<-Sapidus_RCP45_2050[, c('Longitude', 'Latitude')]
 Sapidus_RCP45_2050$RCP45_2050 = 1
-nrow(Sapidus_RCP45_2050) #27652
+nrow(Sapidus_RCP45_2050) 
 
 write.csv(Sapidus_RCP45_2050,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Sapidus_RCP45_2050_1.csv')
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -562,7 +552,7 @@ pts.sp1_RCP45_2050 <- rasterToPoints(tmp_RCP45_2050,
                                      fun = function(x) {
                                        x > 0
                                      })
-nrow(pts.sp1_RCP45_2050)# 2121
+nrow(pts.sp1_RCP45_2050)
 
 projection(Sapidus_RCP45_2050) <- CRS('+proj=longlat +ellps=WGS84 
 	               +datum=WGS84 +no_defs +towgs84=0,0,0')
@@ -577,9 +567,9 @@ write.csv(pts.sp1_RCP45_2050,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/RCP45
 # Extract presence values
 RCP45_2050.cov <- raster::extract(RCP45_2050_covs, pts.sp1_RCP45_2050[, 1:2])
 RCP45_2050.cov <- na.omit(RCP45_2050.cov)
-head(RCP45_2050.cov) #602, 668
+head(RCP45_2050.cov) 
 nrow(RCP45_2050.cov)
-nrow(pts.sp1_RCP45_2050) #2121
+nrow(pts.sp1_RCP45_2050) 
 which(is.na(RCP45_2050.cov))
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -592,7 +582,7 @@ plot(absence_RCP45_2050)
 
 nrow(absence_RCP45_2050)
 
-abs.cov_RCP45_2050 <- raster::extract(RCP45_2050_covs, absence_RCP45_2050) #668
+abs.cov_RCP45_2050 <- raster::extract(RCP45_2050_covs, absence_RCP45_2050) 
 
 write.csv(absence_RCP45_2050,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Absence_0.csv')
 
@@ -635,7 +625,7 @@ corrplot(cor(RCP45_2050_all.cov[,1:3]),addCoef.col = 1,number.cex = 0.5,
 dev.off()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# RCP45_2050                         BART MODELLING                               #
+# RCP45_2050                         BART MODELLING                            #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #--------------------------- Variable selection and returns the model
@@ -741,7 +731,7 @@ writeRaster(RCP45_2050_Uncert,
             ,overwrite=TRUE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# RCP45_2050                           ANALYTICS                                  #
+# RCP45_2050                           ANALYTICS                               #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~~~~~~~~~ Load modified functions
 source("~/efc/R_Stat/2022_NEMA/SDM_Bayes/varimpEU.R")
@@ -769,7 +759,7 @@ summary.bartEU(RET_RCP45_2050.model)
 dev.off()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# RCP45_2050       SPARTIAL EFFECT - PARTIAL MAPS                     #
+# RCP45_2050       SPARTIAL EFFECT - PARTIAL MAPS                              #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # RCP45_2050 Temperature
@@ -781,8 +771,6 @@ plot(RCP45_2050_sp.Temp,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Temp',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP45_2050_sp.Temp, 
@@ -798,8 +786,6 @@ plot(RCP45_2050_sp.Sal,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Sal',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP45_2050_sp.Sal, 
@@ -815,8 +801,6 @@ plot(RCP45_2050_sp.Cur,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Cur',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP45_2050_sp.Cur, 
@@ -824,8 +808,8 @@ writeRaster(RCP45_2050_sp.Cur,
             ,overwrite=TRUE)
 
 # Computation time
-Time.masked <- difftime(Sys.time(),Start,units="min") # Time difference
-Time.masked # 0.1073102 mins
+Time.masked <- difftime(Sys.time(),Start,units="min") 
+Time.masked 
 
 #
 #----------------------------------- / / --------------------------------------#
@@ -843,14 +827,14 @@ Start <- Sys.time()
 setwd("~/efc/R_Stat/2022_NEMA/SDM_Bayes/1_Species")
 spg<-read.csv("Csapidus_filtered.csv",dec=".",sep=",",header=T)
 head(spg, 20) 
-nrow(spg) # 41.122 occurrences
+nrow(spg) 
 
 #--------------------------- Duplicated coordinates data 
 dups2 <- duplicated(spg[, c("Latitude","Longitude")]);dups2
-sum(dups2) # duplicated coordinates = 13.470
+sum(dups2) 
 
 spg <- spg[!dups2, ]
-nrow(spg) # final data = 27.652 occurrences
+nrow(spg) 
 
 #--------------------------- Covert data frame to spatial data
 spg1 <- SpatialPointsDataFrame(spg[, 1:2], data.frame(spg[, 3]))
@@ -862,7 +846,7 @@ spg1<-as.data.frame(spg1)
 Sapidus_RCP45_2100<-spg1
 Sapidus_RCP45_2100<-Sapidus_RCP45_2100[, c('Longitude', 'Latitude')]
 Sapidus_RCP45_2100$RCP45_2100 = 1
-nrow(Sapidus_RCP45_2100) #27652
+nrow(Sapidus_RCP45_2100) 
 
 write.csv(Sapidus_RCP45_2100,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Sapidus_RCP45_2100_1.csv')
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -930,7 +914,7 @@ pts.sp1_RCP45_2100 <- rasterToPoints(tmp_RCP45_2100,
                                      fun = function(x) {
                                        x > 0
                                      })
-nrow(pts.sp1_RCP45_2100)# 2121
+nrow(pts.sp1_RCP45_2100)
 
 projection(Sapidus_RCP45_2100) <- CRS('+proj=longlat +ellps=WGS84 
 	               +datum=WGS84 +no_defs +towgs84=0,0,0')
@@ -945,9 +929,9 @@ write.csv(pts.sp1_RCP45_2100,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/RCP45
 # Extract presence values
 RCP45_2100.cov <- raster::extract(RCP45_2100_covs, pts.sp1_RCP45_2100[, 1:2])
 RCP45_2100.cov <- na.omit(RCP45_2100.cov)
-head(RCP45_2100.cov) #602, 668
+head(RCP45_2100.cov) 
 nrow(RCP45_2100.cov)
-nrow(pts.sp1_RCP45_2100) #2121
+nrow(pts.sp1_RCP45_2100) 
 which(is.na(RCP45_2100.cov))
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -960,7 +944,7 @@ plot(absence_RCP45_2100)
 
 nrow(absence_RCP45_2100)
 
-abs.cov_RCP45_2100 <- raster::extract(RCP45_2100_covs, absence_RCP45_2100) #668
+abs.cov_RCP45_2100 <- raster::extract(RCP45_2100_covs, absence_RCP45_2100) 
 
 write.csv(absence_RCP45_2100,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Absence_0.csv')
 
@@ -1003,7 +987,7 @@ corrplot(cor(RCP45_2100_all.cov[,1:3]),addCoef.col = 1,number.cex = 0.5,
 dev.off()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# RCP45_2100                         BART MODELLING                               #
+# RCP45_2100                         BART MODELLING                            #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #--------------------------- Variable selection and returns the model
@@ -1111,7 +1095,7 @@ writeRaster(RCP45_2100_Uncert,
             ,overwrite=TRUE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# RCP45_2100                           ANALYTICS                                  #
+# RCP45_2100                           ANALYTICS                               #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~~~~~~~~~ Load modified functions
 source("~/efc/R_Stat/2022_NEMA/SDM_Bayes/varimpEU.R")
@@ -1128,7 +1112,6 @@ dev.off()
 #~~~~~~~~~~ Varimp
 tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/RCP45_2100_varimpEU.tiff",
      width=6, height=4, units="in", res=600)
-#varimp(RET_RCP45_2100.model, plots=TRUE)
 varimpEU(RET_RCP45_2100.model, plots=TRUE)
 dev.off()
 
@@ -1139,7 +1122,7 @@ summary.bartEU(RET_RCP45_2100.model)
 dev.off()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# RCP45_2100       SPARTIAL EFFECT - PARTIAL MAPS                     #
+# RCP45_2100       SPARTIAL EFFECT - PARTIAL MAPS                              #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # RCP45_2100 Temperature
@@ -1151,8 +1134,6 @@ plot(RCP45_2100_sp.Temp,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Temp',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP45_2100_sp.Temp, 
@@ -1168,8 +1149,6 @@ plot(RCP45_2100_sp.Sal,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Sal',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP45_2100_sp.Sal, 
@@ -1185,8 +1164,6 @@ plot(RCP45_2100_sp.Cur,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Cur',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP45_2100_sp.Cur, 
@@ -1194,7 +1171,7 @@ writeRaster(RCP45_2100_sp.Cur,
             ,overwrite=TRUE)
 
 # Computation time
-Time.masked <- difftime(Sys.time(),Start,units="min") # Time difference
+Time.masked <- difftime(Sys.time(),Start,units="min") 
 Time.masked # 0.1073102 mins
 
 #
@@ -1315,9 +1292,9 @@ write.csv(pts.sp1_RCP85_2050,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/RCP85
 # Extract presence values
 RCP85_2050.cov <- raster::extract(RCP85_2050_covs, pts.sp1_RCP85_2050[, 1:2])
 RCP85_2050.cov <- na.omit(RCP85_2050.cov)
-head(RCP85_2050.cov) #602, 668
+head(RCP85_2050.cov) 
 nrow(RCP85_2050.cov)
-nrow(pts.sp1_RCP85_2050) #2121
+nrow(pts.sp1_RCP85_2050) 
 which(is.na(RCP85_2050.cov))
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1330,7 +1307,7 @@ plot(absence_RCP85_2050)
 
 nrow(absence_RCP85_2050)
 
-abs.cov_RCP85_2050 <- raster::extract(RCP85_2050_covs, absence_RCP85_2050) #668
+abs.cov_RCP85_2050 <- raster::extract(RCP85_2050_covs, absence_RCP85_2050) 
 
 write.csv(absence_RCP85_2050,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Absence_0.csv')
 
@@ -1396,12 +1373,13 @@ load('~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/RCP85_2050_retune.model.rds')
 
 #--------------------------- Spatial prediction
 RCP85_2050_Pred.map <- predict(
-  object = RET_RCP85_2050.model,
-  x.layers = RCP85_2050_covs,
-  quantiles = c(0.025, 0.975),
-  splitby = 20,
-  quiet = TRUE)
+                            object = RET_RCP85_2050.model,
+                            x.layers = RCP85_2050_covs,
+                            quantiles = c(0.025, 0.975),
+                            splitby = 20,
+                            quiet = TRUE)
 
+plot(RCP85_2050_Pred.map, col=cl)
 save(RCP85_2050_Pred.map,
      file='~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/RCP85_2050_Pred.map.rds')
 load('~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/RCP85_2050_Pred.map.rds') 
@@ -1519,8 +1497,6 @@ plot(RCP85_2050_sp.Temp,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Temp',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP85_2050_sp.Temp, 
@@ -1536,8 +1512,6 @@ plot(RCP85_2050_sp.Sal,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Sal',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP85_2050_sp.Sal, 
@@ -1553,8 +1527,6 @@ plot(RCP85_2050_sp.Cur,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Cur',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP85_2050_sp.Cur, 
@@ -1683,9 +1655,9 @@ write.csv(pts.sp1_RCP85_2100,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/RCP85
 # Extract presence values
 RCP85_2100.cov <- raster::extract(RCP85_2100_covs, pts.sp1_RCP85_2100[, 1:2])
 RCP85_2100.cov <- na.omit(RCP85_2100.cov)
-head(RCP85_2100.cov) #602, 668
+head(RCP85_2100.cov) 
 nrow(RCP85_2100.cov)
-nrow(pts.sp1_RCP85_2100) #2121
+nrow(pts.sp1_RCP85_2100) 
 which(is.na(RCP85_2100.cov))
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1698,7 +1670,7 @@ plot(absence_RCP85_2100)
 
 nrow(absence_RCP85_2100)
 
-abs.cov_RCP85_2100 <- raster::extract(RCP85_2100_covs, absence_RCP85_2100) #668
+abs.cov_RCP85_2100 <- raster::extract(RCP85_2100_covs, absence_RCP85_2100) 
 
 write.csv(absence_RCP85_2100,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Absence_0.csv')
 
@@ -1764,11 +1736,12 @@ load('~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/RCP85_2100_retune.model.rds')
 
 #--------------------------- Spatial prediction
 RCP85_2100_Pred.map <- predict(
-  object = RET_RCP85_2100.model,
-  x.layers = RCP85_2100_covs,
-  quantiles = c(0.025, 0.975),
-  splitby = 20,
-  quiet = TRUE)
+                        object = RET_RCP85_2100.model,
+                        x.layers = RCP85_2100_covs,
+                        quantiles = c(0.025, 0.975),
+                        splitby = 20,
+                        quiet = TRUE)
+plot(RCP85_2100_Pred.map, col=cl)
 
 save(RCP85_2100_Pred.map,
      file='~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/RCP85_2100_Pred.map.rds')
@@ -1864,7 +1837,6 @@ dev.off()
 #~~~~~~~~~~ Varimp
 tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/RCP85_2100_varimpEU.tiff",
      width=6, height=4, units="in", res=600)
-#varimp(RET_RCP85_2100.model, plots=TRUE)
 varimpEU(RET_RCP85_2100.model, plots=TRUE)
 dev.off()
 
@@ -1887,8 +1859,6 @@ plot(RCP85_2100_sp.Temp,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Temp',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP85_2100_sp.Temp, 
@@ -1904,8 +1874,6 @@ plot(RCP85_2100_sp.Sal,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Sal',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP85_2100_sp.Sal, 
@@ -1921,8 +1889,6 @@ plot(RCP85_2100_sp.Cur,col=cl,
      box = FALSE,
      axes = FALSE,
      main = 'Spartial plot: Cur',
-     #zlim = c(0,1),
-     #axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
      legend.args=list(text='Partial effect', side=2, line=1.3))
 dev.off()
 writeRaster(RCP85_2100_sp.Cur, 
@@ -1930,8 +1896,8 @@ writeRaster(RCP85_2100_sp.Cur,
             ,overwrite=TRUE)
 
 # Computation time
-Time.masked <- difftime(Sys.time(),Start,units="min") # Time difference
-Time.masked # 0.1073102 mins
+Time.masked <- difftime(Sys.time(),Start,units="min") 
+Time.masked # 48.11633 mins
 
 #
 #----------------------------------- / / --------------------------------------#

@@ -1,0 +1,781 @@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+# Author: Eudriano Costa
+# Manuscrispt: Aquatic species shows asymmetric distribution range shifts in native and
+# non-native areas 
+# SDM - Species Distribution Models  
+# R version 4.0.0
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+rm(list = ls())
+
+#--------------------------- Libraries/ packages 
+packs <-c('rgdal','spdep', 'tmap','tidyverse','dismo','maptools','sf','report', 
+          'performance','sp','rgeos','ggplot2','plotly','raster','tidyr',
+          'dplyr','sdm', 'rworldmap','usdm', 'mapview', 
+          'evaluate','corrplot','GGally','embarcadero')
+
+lapply(packs, FUN = function(X) {
+  do.call("require", list(X)) 
+})
+(.packages()) # Check loaded packages
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#
+# Scenario model:    Current/present (2000 - 2014)                             #
+#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Loading env variables
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#                           Species data                                       #
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+setwd("~/efc/R_Stat/2022_NEMA/SDM_Bayes/1_Species")
+spg<-read.csv("Csapidus_filtered.csv",dec=".",sep=",",header=T)
+head(spg, 20) 
+nrow(spg) 
+
+#--------------------------- Duplicated coordinates data 
+dups2 <- duplicated(spg[, c("Latitude","Longitude")]);dups2
+sum(dups2) 
+
+spg <- spg[!dups2, ]
+nrow(spg) 
+
+#--------------------------- Covert data frame to spatial data
+spg1 <- SpatialPointsDataFrame(spg[, 1:2], data.frame(spg[, 3]))
+names(spg1@data) <- 'Presence'
+nrow(spg1)
+head(spg1)
+
+spg1<-as.data.frame(spg1)
+Sapidus_Pres<-spg1
+Sapidus_Pres<-Sapidus_Pres[, c('Longitude', 'Latitude')]
+Sapidus_Pres$Presence = 1
+nrow(Sapidus_Pres) 
+
+write.csv(Sapidus_Pres,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Sapidus_Pres_1.csv')
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#                               EEZ to crop data                               #
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+EEZ <-read_sf(
+  '~/efc/R_Stat/2022_NEMA/SDM_Bayes/2_Predictors/EEZ_shapes/EEZ_0_200.shp'#EEZ_NoISla
+)
+plot(EEZ,col='aliceblue')
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#                               Set color pallette                             #
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+cl<-colorRampPalette(c("#3E49BB","#3498DB","yellow",    
+                                "orange", "red", "darkred"))(200)
+                                
+save(cl, 
+     file='~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/cl.rds')
+load('~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/cl.rds') 
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#
+#                    CURRENT predictors - 1830 to 2022:                        #
+#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Loading env variables
+Present_Cov <-list.files(path="~/efc/R_Stat/2022_NEMA/SDM_Bayes/2_Predictors/Present", 
+                         pattern="\\.tif$", full.names=T)
+Present_Cov
+
+#--------------------------- Stack rasters and set crs
+Present_Cov <- stack(Present_Cov)
+Present_Cov@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+plot(Present_Cov[[3]],col=cl)
+
+#--------------------------- Crop both dataset manually
+# --- crop by LAT and LONG
+e <- extent(c(-99.89664,45.00737, -47.29764, 62.02496))
+Present_bioc<- crop(Present_Cov,e)
+
+#---------------------------  Crop by EEZ
+masked <- mask(x = Present_bioc, mask = EEZ)
+plot(masked, col=cl)
+Present_bioc <- crop(x = masked, y = extent(EEZ))
+plot(Present_bioc, col=cl)
+
+#---------------------------  Rename and CRS
+Present_covs <- Present_bioc # covariates
+Present_covs@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+#---------------------------  Predictor Plots
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Present_Covs.tiff",
+     width=8, height=4, units="in", res=600)
+
+plot(Present_covs, col=cl)
+
+dev.off()
+
+#---------------------------  Rasterizations and point by grid cell
+Sapidus_Pres <- SpatialPointsDataFrame(Sapidus_Pres[, 1:2], data.frame(Presence = Sapidus_Pres[, 3]))
+tmp_Pres <- rasterize(Sapidus_Pres, Present_covs[[1]], field = "Presence", fun = "min")
+pts.sp1_Pres <- rasterToPoints(tmp_Pres,
+                               fun = function(x) {
+                                 x > 0
+                               })
+nrow(pts.sp1_Pres)
+
+projection(Sapidus_Pres) <- CRS('+proj=longlat +ellps=WGS84 
+	               +datum=WGS84 +no_defs +towgs84=0,0,0')
+class(Sapidus_Pres) 
+st_crs(Sapidus_Pres)
+
+write.csv(pts.sp1_Pres,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Presence_Rasterization.csv')
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#
+#                              RCP45_2050 predictors                           #
+#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Loading env variables
+RCP45_2050_Cov <-list.files(path="~/efc/R_Stat/2022_NEMA/SDM_Bayes/2_Predictors/RCP45_2050", 
+                            pattern="\\.tif$", full.names=T)
+RCP45_2050_Cov
+
+#--------------------------- Stack rasters and set crs
+RCP45_2050_Cov <- stack(RCP45_2050_Cov)
+RCP45_2050_Cov@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+plot(RCP45_2050_Cov[[3]],col=cl)
+
+#--------------------------- Crop both dataset manually
+# --- crop by LAT and LONG
+e <- extent(c(-99.89664,45.00737, -47.29764, 62.02496))
+RCP45_2050_bioc<- crop(RCP45_2050_Cov,e)
+
+#---------------------------  Crop by EEZ
+masked <- mask(x = RCP45_2050_bioc, mask = EEZ)
+plot(masked, col=cl)
+RCP45_2050_bioc <- crop(x = masked, y = extent(EEZ))
+plot(RCP45_2050_bioc, col=cl)
+
+#---------------------------  Rename and CRS
+RCP45_2050_covs <- RCP45_2050_bioc # covariates
+RCP45_2050_covs@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+#---------------------------  Covariate Plots
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/RCP45_2050_Covs.tiff",
+     width=8, height=4, units="in", res=600)
+
+plot(RCP45_2050_covs, col=cl)
+
+dev.off()
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#
+#                              RCP45_2100 predictors                           #
+#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Loading env variables
+RCP45_2100_Cov <-list.files(path="~/efc/R_Stat/2022_NEMA/SDM_Bayes/2_Predictors/RCP45_2100", 
+                            pattern="\\.tif$", full.names=T)
+RCP45_2100_Cov
+
+#--------------------------- Stack rasters and set crs
+RCP45_2100_Cov <- stack(RCP45_2100_Cov)
+RCP45_2100_Cov@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+plot(RCP45_2100_Cov[[3]],col=cl)
+
+#--------------------------- Crop both dataset manually
+# --- crop by LAT and LONG
+e <- extent(c(-99.89664,45.00737, -47.29764, 62.02496))
+RCP45_2100_bioc<- crop(RCP45_2100_Cov,e)
+
+#---------------------------  Crop by EEZ
+masked <- mask(x = RCP45_2100_bioc, mask = EEZ)
+plot(masked, col=cl)
+RCP45_2100_bioc <- crop(x = masked, y = extent(EEZ))
+plot(RCP45_2100_bioc, col=cl)
+
+#---------------------------  Rename and CRS
+RCP45_2100_covs <- RCP45_2100_bioc # covariates
+RCP45_2100_covs@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+#---------------------------  Covariate Plots
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/RCP45_2100_Covs.tiff",
+     width=8, height=4, units="in", res=600)
+
+plot(RCP45_2100_covs, col=cl)
+
+dev.off()
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#
+#                              RCP85_2050 predictors                           #
+#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Loading env variables
+RCP85_2050_Cov <-list.files(path="~/efc/R_Stat/2022_NEMA/SDM_Bayes/2_Predictors/RCP85_2050", 
+                            pattern="\\.tif$", full.names=T)
+RCP85_2050_Cov
+
+#--------------------------- Stack rasters and set crs
+RCP85_2050_Cov <- stack(RCP85_2050_Cov)
+RCP85_2050_Cov@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+plot(RCP85_2050_Cov[[3]],col=cl)
+
+#--------------------------- Crop both dataset manually
+# --- crop by LAT and LONG
+e <- extent(c(-99.89664,45.00737, -47.29764, 62.02496))
+RCP85_2050_bioc<- crop(RCP85_2050_Cov,e)
+
+#---------------------------  Crop by EEZ
+masked <- mask(x = RCP85_2050_bioc, mask = EEZ)
+plot(masked, col=cl)
+RCP85_2050_bioc <- crop(x = masked, y = extent(EEZ))
+plot(RCP85_2050_bioc, col=cl)
+
+#---------------------------  Rename and CRS
+RCP85_2050_covs <- RCP85_2050_bioc # covariates
+RCP85_2050_covs@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+#---------------------------  Covariate Plots
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/RCP85_2050_Covs.tiff",
+     width=8, height=4, units="in", res=600)
+
+plot(RCP85_2050_covs, col=cl)
+
+dev.off()
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#
+#                              RCP85_2100 predictors                           #
+#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Loading env variables
+RCP85_2100_Cov <-list.files(path="~/efc/R_Stat/2022_NEMA/SDM_Bayes/2_Predictors/RCP85_2100", 
+                            pattern="\\.tif$", full.names=T)
+RCP85_2100_Cov
+
+#--------------------------- Stack rasters and set crs
+RCP85_2100_Cov <- stack(RCP85_2100_Cov)
+RCP85_2100_Cov@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+plot(RCP85_2100_Cov[[3]],col=cl)
+
+#--------------------------- Crop both dataset manually
+# --- crop by LAT and LONG
+e <- extent(c(-99.89664,45.00737, -47.29764, 62.02496))
+RCP85_2100_bioc<- crop(RCP85_2100_Cov,e)
+
+#---------------------------  Crop by EEZ
+masked <- mask(x = RCP85_2100_bioc, mask = EEZ)
+plot(masked, col=cl)
+RCP85_2100_bioc <- crop(x = masked, y = extent(EEZ))
+plot(RCP85_2100_bioc, col=cl)
+
+#---------------------------  Rename and CRS
+RCP85_2100_covs <- RCP85_2100_bioc # covariates
+RCP85_2100_covs@crs <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0') 
+
+#---------------------------  Covariate Plots
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/RCP85_2100_Covs.tiff",
+     width=8, height=4, units="in", res=600)
+
+plot(RCP85_2100_covs, col=cl)
+
+dev.off()
+
+#-------------------------------------------------------------------------------
+#
+#                               Extract presence values                        #
+#
+#-------------------------------------------------------------------------------
+# Extract presence values
+pres.cov <- raster::extract(Present_covs, pts.sp1_Pres[, 1:2])
+pres.cov <- na.omit(pres.cov)
+head(pres.cov) 
+nrow(pres.cov)
+nrow(pts.sp1_Pres) 
+which(is.na(pres.cov))
+
+#-------------------------------------------------------------------------------
+#
+#             Generate pseudo-absence/ background points                       #
+#
+#-------------------------------------------------------------------------------
+# Loading env variables
+absence_Pres <- randomPoints(Present_covs, nrow(pres.cov))
+
+plot(absence_Pres)
+
+nrow(absence_Pres)
+
+abs.cov_Pres <- raster::extract(Present_covs, absence_Pres) 
+
+write.csv(absence_Pres,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Absence_0.csv')
+
+#--------------------------- Code the response
+pres.cov <- data.frame(pres.cov)
+pres.cov$Sapidus_Pres <- 1
+abs.cov_Pres <- data.frame(abs.cov_Pres)
+abs.cov_Pres$Sapidus_Pres <- 0
+
+#--------------------------- And one to bind them
+Present_all.cov <- rbind(pres.cov, abs.cov_Pres)
+Present_all.cov <- Present_all.cov[complete.cases(Present_all.cov), ]
+nrow(Present_all.cov)
+head(Present_all.cov)
+which(is.na(Present_all.cov))
+
+Present_xvars <- names(Present_all.cov)[!(names(Present_all.cov) == 'Sapidus_Pres')]
+Present_xvars
+
+# Save files
+write.csv(Present_all.cov,'~/efc/R_Stat/2022_NEMA/SDM_Bayes/6_csv_files/Present_all.cov.csv')
+
+save(Present_all.cov, 
+     file='~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/Present_all.cov.rds')
+load('~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/Present_all.cov.rds') 
+
+save(Present_xvars, 
+     file='~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/Present_xvars.rds')
+load('~/efc/R_Stat/2022_NEMA/SDM_Bayes/5_R_files/Present_xvars.rds') 
+
+#-------------------------------------------------------------------------------
+#
+#                               Correlation and collinearity                   #
+#
+#-------------------------------------------------------------------------------
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Present_all.cov.tiff",
+     width=6, height=4, units="in", res=600)
+
+corrplot(cor(Present_all.cov[,1:3]),addCoef.col = 1,number.cex = 0.5,
+         order = 'AOE',type = 'upper') 
+dev.off()
+
+#-------------------------------------------------------------------------------
+#
+#                               BART MODELLING                                 #
+#
+#-------------------------------------------------------------------------------
+
+#
+#---------------------------< Current Bart model (variable selection)
+step.model <- variable.step(x.data = Present_all.cov[, Present_xvars],
+                            y.data = Present_all.cov[, 'Sapidus_Pres'],
+                            quiet = TRUE)
+step.model
+
+#---------------------------< Retrain the model
+Bart_sdm <- bart(x.train=Present_all.cov[, step.model], y.train=Present_all.cov[, 'Sapidus_Pres'],
+                 keeptrees = TRUE)
+summary(Bart_sdm)
+
+#---------------------------< Retune the model: cross-validation
+RET_sdm<-retune(Bart_sdm, reps = 10) 
+summary(RET_sdm)
+
+#---------------------------< CURRENT: Plot Predicted probability: mean, 2.5% , 97.5% and uncertainty
+#--- Predicting current scenario
+map_current <- predict(RET_sdm, Present_covs, quantiles=c(0.025, 0.975),quiet=TRUE)
+
+#--- General plot- first view
+plot(predict(RET_sdm, Present_covs, quiet=TRUE))
+
+#---Predicted probability
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_Current_MeanPred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_current[[1]],col=cl,
+     box = F,
+     axes = F,
+     main = 'Present: mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- Current_2.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_Current_2.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_current[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'Present: 2.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- Current_97.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_Current_97.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_current[[3]],col=cl,
+     box = F,
+     axes = F,
+     main = 'Present: 97.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- Current Uncertainty 
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_Current_Uncertainty.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_current[[3]]-map_current[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'Current uncertainty',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Posterior width', side=2, line=1.3))
+dev.off()
+
+#---------------------------< RCP45_2050: Plot Predicted probability: mean, 2.5% , 97.5% and uncertainty
+#--- Rename predictors
+names(RCP45_2050_covs)
+names(RCP45_2050_covs) <- c('Pres_Cur', 'Pres_Sal', 'Pres_Temp')# rename rasters
+
+#--- Predicting RCP45_2050 scenario
+map_RCP45_2050 <- predict(RET_sdm, RCP45_2050_covs, quantiles=c(0.025, 0.975),quiet=TRUE)
+
+#--- General plot- first view
+plot(predict(RET_sdm, RCP45_2050_covs, quiet=TRUE))
+
+#---Predicted probability
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP45_2050_MeanPred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP45_2050[[1]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP45_2050: mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP45_2050_2.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP45_2050_2.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP45_2050[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP45_2050: 2.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP45_2050_97.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP45_2050_97.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP45_2050[[3]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP45_2050: 97.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP45_2050 Uncertainty 
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP45_2050_Uncertainty.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP45_2050[[3]]-map_RCP45_2050[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP45_2050 uncertainty',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Posterior width', side=2, line=1.3))
+dev.off()
+
+#---------------------------< RCP45_2100: Plot Predicted probability: mean, 2.5% , 97.5% and uncertainty
+#--- Rename predictors
+names(RCP45_2100_covs)
+names(RCP45_2100_covs) <- c('Pres_Cur', 'Pres_Sal', 'Pres_Temp')# rename rasters
+
+#--- Predicting RCP45_2100 scenario
+map_RCP45_2100 <- predict(RET_sdm, RCP45_2100_covs, quantiles=c(0.025, 0.975),quiet=TRUE)
+
+#--- General plot- first view
+plot(predict(RET_sdm, RCP45_2100_covs, quiet=TRUE))
+
+#---Predicted probability
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP45_2100_MeanPred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP45_2100[[1]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP45_2100: mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP45_2100_2.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP45_2100_2.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP45_2100[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP45_2100: 2.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP45_2100_97.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP45_2100_97.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP45_2100[[3]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP45_2100: 97.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP45_2100 Uncertainty 
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP45_2100_Uncertainty.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP45_2100[[3]]-map_RCP45_2100[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP45_2100 uncertainty',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Posterior width', side=2, line=1.3))
+dev.off()
+
+#---------------------------< RCP85_2050: Plot Predicted probability: mean, 2.5% , 97.5% and uncertainty
+#--- Rename predictors
+names(RCP85_2050_covs)
+names(RCP85_2050_covs) <- c('Pres_Cur', 'Pres_Sal', 'Pres_Temp')# rename rasters
+
+#--- Predicting RCP85_2050 scenario
+map_RCP85_2050 <- predict(RET_sdm, RCP85_2050_covs, quantiles=c(0.025, 0.975),quiet=TRUE)
+
+#--- General plot- first view
+plot(predict(RET_sdm, RCP85_2050_covs, quiet=TRUE))
+
+#---Predicted probability
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP85_2050_MeanPred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP85_2050[[1]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP85_2050: mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP85_2050_2.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP85_2050_2.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP85_2050[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP85_2050: 2.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP85_2050_97.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP85_2050_97.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP85_2050[[3]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP85_2050: 97.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP85_2050 Uncertainty 
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP85_2050_Uncertainty.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP85_2050[[3]]-map_RCP85_2050[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP85_2050 uncertainty',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Posterior width', side=2, line=1.3))
+dev.off()
+
+#---------------------------< RCP85_2100: Plot Predicted probability: mean, 2.5% , 97.5% and uncertainty
+#--- Rename predictors
+names(RCP85_2100_covs)
+names(RCP85_2100_covs) <- c('Pres_Cur', 'Pres_Sal', 'Pres_Temp')# rename rasters
+
+#--- Predicting RCP85_2100 scenario
+map_RCP85_2100 <- predict(RET_sdm, RCP85_2100_covs, quantiles=c(0.025, 0.975),quiet=TRUE)
+
+#--- General plot- first view
+plot(predict(RET_sdm, RCP85_2100_covs, quiet=TRUE))
+
+#---Predicted probability
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP85_2100_MeanPred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP85_2100[[1]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP85_2100: mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP85_2100_2.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP85_2100_2.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP85_2100[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP85_2100: 2.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP85_2100_97.5% predict
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP85_2100_97.5_Pred.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP85_2100[[3]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP85_2100: 97.5% mean predict',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Probability', side=2, line=1.3))
+dev.off()
+
+#--- RCP85_2100 Uncertainty 
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_RCP85_2100_Uncertainty.tiff",
+     width=6, height=4, units="in", res=600)
+plot(map_RCP85_2100[[3]]-map_RCP85_2100[[2]],col=cl,
+     box = F,
+     axes = F,
+     main = 'RCP85_2100 uncertainty',
+     zlim = c(0,1),
+     axis.args=list(at=pretty(0:1), labels=pretty(0:1)),
+     legend.args=list(text='Posterior width', side=2, line=1.3))
+dev.off()
+
+#-------------------------------------------------------------------------------
+#
+#                               BART MODELLING                                 #
+#
+#-------------------------------------------------------------------------------
+
+#--- Variable importance diagnostic
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Current_VarimpDiag.tiff",
+     width=6, height=4, units="in", res=600)
+
+varimp.diag(Present_all.cov[,Present_xvars], Present_all.cov[,'Sapidus_Pres'], 
+            ri.data = NULL, iter = 50, quiet = FALSE)
+dev.off() 
+
+#--- Selected predictors 
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Current_varimpEU.tiff",
+     width=6, height=4, units="in", res=600)
+
+varimpEU(RET_sdm, plots=TRUE)
+dev.off()
+
+#--- Summary model diagnostic 
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Current_Summary.tiff",
+     width=8, height=6, units="in", res=600)
+
+summary.bartEU(RET_sdm)
+dev.off()
+
+#-------------------------------------------------------------------------------
+#
+#        Habitat: range expansion (+), no change (0) and retraction (-)        #
+#
+#-------------------------------------------------------------------------------
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_Diff_RCP45_2050.tiff",
+     width=8.5, height=4, units="in", res=600)
+
+plot(map_RCP45_2050[[1]]-map_present[[1]], 'Gain and Loss-45.2050', col=cl, 
+     box=F, axes=F)
+
+dev.off()
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_Diff_RCP45_2100.tiff",
+     width=8.5, height=4, units="in", res=600)
+
+plot(map_RCP45_2100[[1]]-map_present[[1]], 'Gain and Loss-45.2100', col=cl, 
+     box=F, axes=F)
+
+dev.off()
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_Diff_map_RCP85_2050.tiff",
+     width=8.5, height=4, units="in", res=600)
+
+plot(map_RCP85_2050[[1]]-map_present[[1]], 'Gain and Loss-85.2050', col=cl, 
+     box=F, axes=F)
+
+dev.off()
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/1_Diff_map_RCP85_2100.tiff",
+     width=8.5, height=4, units="in", res=600)
+
+plot(map_85_2100[[1]]-map_present[[1]], 'Gain and Loss-85.2100', col=cl, 
+     box=F, axes=F)
+
+dev.off()
+
+#-------------------------------------------------------------------------------
+#
+#                      Two dimensional partial plots                           #
+#
+#-------------------------------------------------------------------------------
+
+#---Current: Temperature ~ salinity
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Current_Temp_Sal.tiff",
+     width=8.5, height=4, units="in", res=600)
+
+dbarts::pd2bart(RET_sdm,plotquants=T, cexlab= 1.5, axes = F,
+                xind = c('Pres_Temp', 'Pres_Sal'), contour.color ='black',
+                pl = TRUE)
+dev.off()
+
+#---Current: Temperature ~ current
+
+tiff(file="~/efc/R_Stat/2022_NEMA/SDM_Bayes/3_Plots/Current_Temp_Cur.tiff",
+     width=8.5, height=4, units="in", res=600)
+
+dbarts::pd2bart(RET_sdm,plotquants=T,
+                xind = c('Pres_Temp', 'Pres_Cur'),
+                pl = TRUE)
+dev.off()
+
+#
+#----------------------------------- / / --------------------------------------#
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
